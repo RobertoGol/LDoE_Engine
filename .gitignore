@@ -1,0 +1,20 @@
+# Сборка
+build/
+out/
+bin/
+.cmake/
+CMakeCache.txt
+CMakeFiles/
+
+# Ассеты и тяжелые файлы (им не место в репозитории кода)
+assets/
+*.rar
+*.zip
+*.ogg
+*.mp3
+*.wav
+
+# IDE
+.vs/
+.vscode/
+*.user
