@@ -7,6 +7,7 @@
 #include "Components/TransformComponent.hpp"
 #include "Components/PlayerInputComponent.hpp"
 #include "Components/ColliderComponent.hpp"
+#include "Components/InteractableComponent.hpp"
 #include <iostream>
 #include <fstream>
 #include <cmath>
@@ -17,85 +18,44 @@ Engine::~Engine() { Shutdown(); }
 bool Engine::Init(const char* title, int width, int height) {
     windowWidth = width; windowHeight = height;
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return false;
+    // 1. Инициализация ядра SDL В САМОМ НАЧАЛЕ
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+        std::cerr << "SDL_Init Error: " << SDL_GetError() << "\n";
+        return false;
+    }
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_MAXIMIZED);
-    window = SDL_CreateWindow(title, width, height, window_flags);
-    if (!window) return false;
-    
+    // 2. Настраиваем атрибуты OpenGL ПЕРЕД созданием окна
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24); // Z-буфер для 3D!
+
+    // 3. Создаем ОДНО окно с поддержкой OpenGL
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_MAXIMIZED);
+    window = SDL_CreateWindow(title, windowWidth, windowHeight, window_flags);
+    if (!window) {
+        std::cerr << "[Engine] Ошибка создания окна: " << SDL_GetError() << "\n";
+        return false;
+    }
+
+    // 4. Создаем OpenGL контекст ВМЕСТО SDL_Renderer
+    glContext = SDL_GL_CreateContext(window);
+    if (!glContext) {
+        std::cerr << "[Engine] Ошибка создания OpenGL контекста: " << SDL_GetError() << "\n";
+        return false;
+    }
+
     SDL_ShowWindow(window);
-    renderer = SDL_CreateRenderer(window, nullptr);
-    if (!renderer) return false;
 
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-    AssetImporter::Init(renderer);
-    DevMenu::Init(window, renderer);
+    // ВАЖНО: Мы пока не создаем SDL_Renderer, потому что будем рисовать через OpenGL!
     
-    ResourceManager::Get().LoadTexture("TestImage", "assets/test.png", renderer);
-
-    std::ifstream file("assets/scene.json");
-    if (file.good()) {
-        LoadScene("assets/scene.json");
-    } else {
-        std::cout << "[Engine] Нет сохраненной сцены, создаем пустую.\n";
-    }
-
-    auto player = std::make_unique<Entity>("Player");
-    auto* playerTransform = player->AddComponent<TransformComponent>();
-    playerTransform->position = { 25.0f, 25.0f };
-
-    player->AddComponent<PlayerInputComponent>();
-
-    auto* playerSprite = player->AddComponent<SpriteRendererComponent>();
-    playerSprite->ClearLayers();
-
-    SDL_Texture* bodyTexture = ResourceManager::Get().LoadTexture("body", "assets/body.png", renderer);
-    SDL_Texture* legsTexture = ResourceManager::Get().LoadTexture("legs", "assets/legs.png", renderer);
-    SDL_Texture* torsoTexture = ResourceManager::Get().LoadTexture("torso", "assets/torso.png", renderer);
-
-    if (bodyTexture) {
-        playerSprite->AddLayer(bodyTexture, "body");
-    }
-    if (legsTexture) {
-        playerSprite->AddLayer(legsTexture, "legs");
-    }
-    if (torsoTexture) {
-        playerSprite->AddLayer(torsoTexture, "torso");
-    }
-
-    if (!playerSprite->HasLayers()) {
-        playerSprite->UsePlaceholder = true;
-        std::cout << "[Engine] Player textures missing, using placeholder shape.\n";
-    }
-
-    player->AddComponent<ColliderComponent>();
-
-    constexpr int walkFrameCount = 8;
-    float sheetWidth = 0.0f;
-    float sheetHeight = 0.0f;
-    if (bodyTexture) {
-        SDL_GetTextureSize(bodyTexture, &sheetWidth, &sheetHeight);
-    }
-    if (sheetWidth > 0.0f && sheetHeight > 0.0f) {
-        playerSprite->Animation.TotalFrames = walkFrameCount;
-        playerSprite->Animation.FrameWidth = static_cast<int>(sheetWidth / walkFrameCount);
-        playerSprite->Animation.FrameHeight = static_cast<int>(sheetHeight);
-        playerSprite->Animation.FrameTime = 0.1f;
-        playerSprite->Animation.CurrentFrame = 0;
-        playerSprite->Animation.CurrentFrameTime = 0.0f;
-    }
-
-    entities.push_back(std::move(player));
-
-    const Vec2 playerScreenPos = IsoMath::WorldToScreen(25.0f, 25.0f, TileWidth, TileHeight);
-    camera.OffsetX = (static_cast<float>(windowWidth) * 0.5f) - playerScreenPos.x;
-    camera.OffsetY = (static_cast<float>(windowHeight) * 0.5f) - playerScreenPos.y;
-
-    std::cout << "[Engine] Тестовый игрок (Paper Doll) заспавнен.\n";
+    // Инициализация ImGui (пока закомментируем старый 2D, ИИ напишет нам новый)
+    // DevMenu::Init(window, renderer); 
+    
+    // Загрузку 2D-спрайтов игрока мы тоже временно отключаем, так как переходим на 3D-модели
+    std::cout << "[Engine] OpenGL 3.3 Инициализирован!\n";
 
     isRunning = true;
-    std::cout << "[Engine] Инициализация успешна. Запуск цикла...\n";
     return true;
 }
 
@@ -181,15 +141,27 @@ void Engine::PlacePreviewObject() {
         return;
     }
 
+    // 1. Сначала СОЗДАЕМ сущность (строка, которая у тебя была ниже)
     auto placedObject = std::make_unique<Entity>("PlacedObject");
+    
+    // 2. Добавляем позицию
     auto* transform = placedObject->AddComponent<TransformComponent>();
     transform->position = previewGridPos;
 
+    // 3. Добавляем спрайт (картинку)
     auto* sprite = placedObject->AddComponent<SpriteRendererComponent>();
     sprite->AddLayer(previewTexture, "workbench");
 
-    placedObject->AddComponent<ColliderComponent>();
+    // 4. Добавляем коллизию
+    auto* collider = placedObject->AddComponent<ColliderComponent>();
+    collider->width = 1.0f;
+    collider->height = 1.0f;
 
+    // 5. Добавляем интерактивность
+    auto* interactable = placedObject->AddComponent<InteractableComponent>();
+    interactable->actionName = "Открыть верстак";
+
+    // 6. Сохраняем объект в мир
     entities.push_back(std::move(placedObject));
     std::cout << "[Engine] Объект размещен на (" << previewGridPos.x << ", " << previewGridPos.y << ")\n";
 }
@@ -254,60 +226,22 @@ void Engine::Update(float deltaTime) {
 }
 
 void Engine::Render() {
-    SDL_SetRenderDrawColor(renderer, 36, 36, 36, 255); 
-    SDL_RenderClear(renderer);
+    // Очищаем экран и буфер глубины средствами OpenGL (вместо SDL_RenderClear)
+    // Закомментируй эти строки, если компилятор ругается на GL_COLOR_BUFFER_BIT (до того как мы подключим glad/glew)
+    // glClearColor(0.14f, 0.14f, 0.14f, 1.0f);
+    // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    const float offsetX = camera.OffsetX;
-    const float offsetY = camera.OffsetY;
-    const float tileW = TileWidth;
-    const float tileH = TileHeight;
-    const int gridSize = MapGridSize;
-
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 150);
-    for (int i = 0; i <= gridSize; ++i) {
-        Vec2 p1_x = IsoMath::WorldToScreen(static_cast<float>(i), 0.0f, tileW, tileH);
-        Vec2 p2_x = IsoMath::WorldToScreen(static_cast<float>(i), static_cast<float>(gridSize), tileW, tileH);
-        SDL_RenderLine(renderer, offsetX + p1_x.x, offsetY + p1_x.y, offsetX + p2_x.x, offsetY + p2_x.y);
-
-        Vec2 p1_y = IsoMath::WorldToScreen(0.0f, static_cast<float>(i), tileW, tileH);
-        Vec2 p2_y = IsoMath::WorldToScreen(static_cast<float>(gridSize), static_cast<float>(i), tileW, tileH);
-        SDL_RenderLine(renderer, offsetX + p1_y.x, offsetY + p1_y.y, offsetX + p2_y.x, offsetY + p2_y.y);
-    }
-
-    RenderSystem::RenderContext context {
-        offsetX,
-        offsetY,
-        tileW,
-        tileH
-    };
+    // --- ЗДЕСЬ БУДЕТ РЕНДЕР 3D МОДЕЛЕЙ ИЗОМЕТРИИ ---
+    /*
+    ВРЕМЕННО ОТКЛЮЧЕННЫЙ 2D РЕНДЕР:
+    RenderSystem::RenderContext context { camera.OffsetX, camera.OffsetY, TileWidth, TileHeight };
     renderSystem.Update(renderer, entities, context);
+    */
 
-    if (isPlacementMode && previewTexture) {
-        const Vec2 previewScreenPos = IsoMath::WorldToScreen(
-            previewGridPos.x,
-            previewGridPos.y,
-            tileW,
-            tileH
-        );
+    // DevMenu::Render(this); // Временно отключаем, пока ИИ не переведет его на OpenGL3
 
-        float previewW = 0.0f;
-        float previewH = 0.0f;
-        SDL_GetTextureSize(previewTexture, &previewW, &previewH);
-
-        const SDL_FRect previewDest {
-            offsetX + previewScreenPos.x - (previewW * 0.5f),
-            offsetY + previewScreenPos.y - previewH,
-            previewW,
-            previewH
-        };
-
-        SDL_SetTextureAlphaMod(previewTexture, 128);
-        SDL_RenderTexture(renderer, previewTexture, nullptr, &previewDest);
-        SDL_SetTextureAlphaMod(previewTexture, 255);
-    }
-
-    DevMenu::Render(this);
-    SDL_RenderPresent(renderer);
+    // Выводим кадр на экран (вместо SDL_RenderPresent)
+    SDL_GL_SwapWindow(window);
 }
 
 void Engine::Run() {
@@ -333,6 +267,7 @@ void Engine::Run() {
         );
 
         Update(deltaTime);
+        
         animationSystem.Update(deltaTime, entities);
         Render();
     }

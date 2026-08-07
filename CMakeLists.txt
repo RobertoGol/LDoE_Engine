@@ -32,6 +32,30 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3_image)
 
+# --- GLM (3D Математика) ---
+include(FetchContent)
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG        master
+)
+FetchContent_MakeAvailable(glm)
+
+# --- ASSIMP (Загрузка 3D моделей - FBX, OBJ, GLTF) ---
+FetchContent_Declare(
+    assimp
+    GIT_REPOSITORY https://github.com/assimp/assimp.git
+    GIT_TAG        v5.3.1
+)
+# Отключаем сборку тестов и лишнего мусора для Assimp, чтобы быстрее компилилось
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(INJECT_DEBUG_POSTFIX OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(assimp)
+
+# Не забудь добавить glm и assimp в target_link_libraries твоего LDoE_Engine!
+# Примерно так: target_link_libraries(LDoE_Engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm assimp)
+
 # nlohmann/json
 FetchContent_Declare(
     nlohmann_json
@@ -57,7 +81,7 @@ add_executable(LDoE_Engine
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp # <-- ВАЖНО: заменили sdlrenderer3 на opengl3!
 )
 
 target_include_directories(LDoE_Engine PRIVATE 
@@ -70,6 +94,8 @@ target_link_libraries(LDoE_Engine PRIVATE
     SDL3::SDL3 
     SDL3_image::SDL3_image 
     nlohmann_json::nlohmann_json
+    glm::glm   # <-- Подключаем 3D-математику к проекту
+    assimp     # <-- Подключаем загрузчик моделей к проекту
 )
 
 target_compile_definitions(LDoE_Engine PRIVATE ENABLE_DEV_MENU=1)

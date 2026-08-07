@@ -8,11 +8,13 @@
 #include "Systems/PlayerMovementSystem.hpp"
 #include "Systems/CameraFollowSystem.hpp"
 #include "Systems/AnimationSystem.hpp"
+#include "Systems/InteractionSystem.hpp"
 #include "Math.hpp"
 
 class Engine {
 private:
     SDL_Window* window = nullptr;
+    SDL_GLContext glContext = nullptr;
     SDL_Renderer* renderer = nullptr;
     bool isRunning = false;
     std::vector<std::unique_ptr<Entity>> entities;
@@ -30,6 +32,7 @@ private:
     bool isPlacementMode = false;
     SDL_Texture* previewTexture = nullptr;
     Vec2 previewGridPos { 0.0f, 0.0f };
+    InteractionSystem interactionSystem;
 
 public:
     Engine();

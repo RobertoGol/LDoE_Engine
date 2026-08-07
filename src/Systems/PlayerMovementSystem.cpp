@@ -78,7 +78,7 @@ void PlayerMovementSystem::Update(const bool* keyboardState,
         return;
     }
 
-    constexpr float moveSpeed = 200.0f;
+    constexpr float moveSpeed = 5.0f; // Для сеточных координат 5 клеток в секунду — это нормально
 
     for (auto& entity : entities) {
         if (!entity->HasComponent<PlayerInputComponent>() ||
