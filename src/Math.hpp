@@ -1,33 +1,25 @@
 #pragma once
-#include <vector>
 
-struct Vector3 {
-    float x, y, z;
-    Vector3(float x = 0.0f, float y = 0.0f, float z = 0.0f) : x(x), y(y), z(z) {}
+struct Vec2 {
+    float x;
+    float y;
 };
 
-struct Vector2 {
-    float x, y;
-    Vector2(float x = 0.0f, float y = 0.0f) : x(x), y(y) {}
-};
-
-// Структура 3D-модели (хранит точки и линии)
-struct Mesh {
-    std::vector<Vector3> vertices;
-    std::vector<std::pair<int, int>> edges;
-};
-
-class IsometricCamera {
+class IsoMath {
 public:
-    float offsetX = 1280.0f / 2.0f;
-    float offsetY = 720.0f / 4.0f;
-    float tileWidth = 64.0f;
-    float tileHeight = 32.0f;
+    // Преобразует декартовы координаты игрового мира в изометрические координаты экрана
+    static Vec2 WorldToScreen(float worldX, float worldY, float tileW = 128.0f, float tileH = 64.0f) {
+        return {
+            (worldX - worldY) * (tileW / 2.0f),
+            (worldX + worldY) * (tileH / 2.0f)
+        };
+    }
 
-    Vector2 WorldToScreen(const Vector3& worldPos) {
-        Vector2 screenPos;
-        screenPos.x = (worldPos.x - worldPos.y) * (tileWidth / 2.0f) + offsetX;
-        screenPos.y = (worldPos.x + worldPos.y) * (tileHeight / 2.0f) - worldPos.z + offsetY;
-        return screenPos;
+    // Преобразует экранные координаты (например, клик мыши) обратно в игровые координаты
+    static Vec2 ScreenToWorld(float screenX, float screenY, float tileW = 128.0f, float tileH = 64.0f) {
+        return {
+            (screenX / (tileW / 2.0f) + screenY / (tileH / 2.0f)) / 2.0f,
+            (screenY / (tileH / 2.0f) - screenX / (tileW / 2.0f)) / 2.0f
+        };
     }
 };

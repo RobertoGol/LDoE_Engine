@@ -4,34 +4,73 @@ project(LDoE_Engine)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Включаем модуль автоматического скачивания зависимостей
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
 include(FetchContent)
 
-# Отключаем сборку примеров и тестов SDL3 для ускорения компиляции
-set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
-set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
-
-# Скачиваем SDL3 напрямую с GitHub (используем стабильный пререлиз)
+# SDL3
 FetchContent_Declare(
     SDL3
-    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG preview-3.1.3
+    URL https://github.com/libsdl-org/SDL/releases/download/release-3.2.8/SDL3-3.2.8.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(SDL3)
 
-# Указываем исходники
-set(SOURCES
-    src/main.cpp
-    src/Engine.cpp
-    src/DevMenu.cpp
+# Отключаем лишние форматы SDL3_image
+set(SDLIMAGE_AVIF OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_TIF OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_JXL OFF CACHE BOOL "" FORCE)
+
+# SDL3_image
+FetchContent_Declare(
+    SDL3_image
+    URL https://github.com/libsdl-org/SDL_image/releases/download/release-3.2.4/SDL3_image-3.2.4.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(SDL3_image)
+
+# nlohmann/json
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# Dear ImGui
+FetchContent_Declare(
+    imgui
+    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.91.6.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(imgui)
+
+file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.hpp")
+
+add_executable(LDoE_Engine 
+    ${ENGINE_SOURCES}
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
 )
 
-# Создаем исполняемый файл
-add_executable(${PROJECT_NAME} ${SOURCES})
+target_include_directories(LDoE_Engine PRIVATE 
+    src 
+    ${imgui_SOURCE_DIR} 
+    ${imgui_SOURCE_DIR}/backends
+)
 
-# Подключаем папку src для заголовочных файлов
-target_include_directories(${PROJECT_NAME} PRIVATE src)
+target_link_libraries(LDoE_Engine PRIVATE 
+    SDL3::SDL3 
+    SDL3_image::SDL3_image 
+    nlohmann_json::nlohmann_json
+)
 
-# Линкуем SDL3
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
+target_compile_definitions(LDoE_Engine PRIVATE ENABLE_DEV_MENU=1)
+
