@@ -41,13 +41,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# --- ASSIMP (Загрузка 3D моделей - FBX, OBJ, GLTF) ---
+# --- ASSIMP (Загрузка 3D моделей) ---
 FetchContent_Declare(
     assimp
     GIT_REPOSITORY https://github.com/assimp/assimp.git
     GIT_TAG        v5.3.1
 )
-# Отключаем сборку тестов и лишнего мусора для Assimp, чтобы быстрее компилилось
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(INJECT_DEBUG_POSTFIX OFF CACHE BOOL "" FORCE)
@@ -69,11 +68,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
-# =====================================================================
-# ИСПРАВЛЕННАЯ ЧАСТЬ СБОРКИ ПРОЕКТА
-# =====================================================================
-
-# Ищем все исходники, включая новый glad.c
+# Ищем все исходники
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.hpp" "src/glad/glad.c")
 
 add_executable(LDoE_Engine 
@@ -83,25 +78,24 @@ add_executable(LDoE_Engine
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp # <-- ВАЖНО: заменили sdlrenderer3 на opengl3!
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
-# СЮДА кладем ПУТИ к папкам с заголовочными файлами (.hpp / .h)
 target_include_directories(LDoE_Engine PRIVATE 
     src 
     ${imgui_SOURCE_DIR} 
     ${imgui_SOURCE_DIR}/backends
-    ${glm_SOURCE_DIR}       # <-- Математика здесь
-    src/glad/include        # <-- GLAD здесь
+    ${glm_SOURCE_DIR}
+    src/glad/include
 )
 
-# СЮДА кладем скомпилированные БИБЛИОТЕКИ (И НИКАКИХ ПУТЕЙ К ПАПКАМ!)
 target_link_libraries(LDoE_Engine PRIVATE 
     SDL3::SDL3 
     SDL3_image::SDL3_image 
     nlohmann_json::nlohmann_json
-    assimp     # <-- Подключаем загрузчик моделей к проекту
-    opengl32   # <-- Системный OpenGL
+    assimp
+    opengl32
 )
+
 
 target_compile_definitions(LDoE_Engine PRIVATE ENABLE_DEV_MENU=1)

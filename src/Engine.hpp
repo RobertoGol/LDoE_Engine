@@ -1,6 +1,9 @@
 #pragma once
+#include <glad/glad.h>
 #include <SDL3/SDL.h>
 #include <vector>
+#include "Shader.hpp"
+#include "Model.hpp"
 #include <memory>
 #include <string>
 #include "ECS.hpp"
@@ -16,6 +19,8 @@ private:
     SDL_Window* window = nullptr;
     SDL_GLContext glContext = nullptr;
     SDL_Renderer* renderer = nullptr;
+    Shader* basicShader = nullptr;
+    Model* testWall = nullptr;
     bool isRunning = false;
     std::vector<std::unique_ptr<Entity>> entities;
     RenderSystem renderSystem;

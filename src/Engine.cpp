@@ -1,9 +1,11 @@
+#include <glad/glad.h>
+#include <SDL3/SDL_opengl.h>
+#include <glm/gtc/matrix_transform.hpp>
 #include "Engine.hpp"
 #include "DevMenu.hpp"
 #include "ResourceManager.hpp"
 #include "AssetImporter.hpp"
 #include "Math.hpp"
-#include <SDL3/SDL_opengl.h>
 #include "Components/SpriteRendererComponent.hpp"
 #include "Components/TransformComponent.hpp"
 #include "Components/PlayerInputComponent.hpp"
@@ -12,8 +14,6 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
-#include <glad/glad.h>
-#include <SDL3/SDL_opengl.h>
 
 Engine::Engine() : isRunning(false), window(nullptr), renderer(nullptr) {}
 Engine::~Engine() { Shutdown(); }
@@ -41,31 +41,30 @@ bool Engine::Init(const char* title, int width, int height) {
         return false;
     }
 
-    // 4. Создаем OpenGL контекст ВМЕСТО SDL_Renderer
+    // 4. Создаем OpenGL контекст
     glContext = SDL_GL_CreateContext(window);
+    if (!glContext) {
+        std::cerr << "[Engine] Ошибка создания OpenGL контекста: " << SDL_GetError() << "\n";
+        return false;
+    }
 
-    glContext = SDL_GL_CreateContext(window);
-    
-    // Активируем GLAD
+    // 5. Активируем GLAD (ТОЛЬКО ПОСЛЕ СОЗДАНИЯ КОНТЕКСТА)
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
         std::cerr << "[Engine] Ошибка инициализации GLAD!\n";
         return false;
     }
     std::cout << "[Engine] GLAD инициализирован. Версия OpenGL: " << glGetString(GL_VERSION) << "\n";
 
-    if (!glContext) {
-        std::cerr << "[Engine] Ошибка создания OpenGL контекста: " << SDL_GetError() << "\n";
-        return false;
-    }
+    // 6. --- ЗАГРУЗКА 3D АССЕТОВ (Теперь всё безопасно) ---
+    basicShader = new Shader("assets/basic.vert", "assets/basic.frag");
+    testWall = new Model("assets/Mesh/wall_straight_1m_concrete.obj"); 
+    // -----------------------------------------------------
 
     SDL_ShowWindow(window);
 
-    // ВАЖНО: Мы пока не создаем SDL_Renderer, потому что будем рисовать через OpenGL!
-    
-    // Инициализация ImGui (пока закомментируем старый 2D, ИИ напишет нам новый)
+    // Инициализация ImGui 
     DevMenu::Init(window, glContext);
     
-    // Загрузку 2D-спрайтов игрока мы тоже временно отключаем, так как переходим на 3D-модели
     std::cout << "[Engine] OpenGL 3.3 Инициализирован!\n";
 
     isRunning = true;
@@ -239,22 +238,42 @@ void Engine::Update(float deltaTime) {
 }
 
 void Engine::Render() {
-    // Очищаем экран и буфер глубины средствами OpenGL (вместо SDL_RenderClear)
-    // Закомментируй эти строки, если компилятор ругается на GL_COLOR_BUFFER_BIT (до того как мы подключим glad/glew)
+    // 1. Очищаем экран и буфер глубины средствами OpenGL
     glClearColor(0.14f, 0.14f, 0.14f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // --- ЗДЕСЬ БУДЕТ РЕНДЕР 3D МОДЕЛЕЙ ИЗОМЕТРИИ ---
-    /*
-    ВРЕМЕННО ОТКЛЮЧЕННЫЙ 2D РЕНДЕР:
-    RenderSystem::RenderContext context { camera.OffsetX, camera.OffsetY, TileWidth, TileHeight };
-    renderSystem.Update(renderer, entities, context);
-    */
+    // 2. Включаем наш шейдер и рисуем 3D
+    if (basicShader && testWall) {
+        basicShader->Use();
 
-    DevMenu::Render(this); // Временно отключаем, пока ИИ не переведет его на OpenGL3
+        // 3. Создаем Идеальную Изометрическую Камеру (Orthographic)
+        float orthoSize = 5.0f; // Охват камеры (зум)
+        float aspect = (float)windowWidth / (float)windowHeight;
+        glm::mat4 projection = glm::ortho(-orthoSize * aspect, orthoSize * aspect, -orthoSize, orthoSize, -50.0f, 50.0f);
+        
+        // Камера висит сверху сбоку и смотрит в центр
+        glm::mat4 view = glm::lookAt(
+            glm::vec3(10.0f, 10.0f, 10.0f), 
+            glm::vec3(0.0f, 0.0f, 0.0f),    
+            glm::vec3(0.0f, 1.0f, 0.0f)     
+        );
 
+        // 4. Позиция самой стены в мире
+        glm::mat4 modelMatrix = glm::mat4(1.0f);
+        
+        // Отправляем матрицы в видеокарту
+        basicShader->SetMat4("projection", projection);
+        basicShader->SetMat4("view", view);
+        basicShader->SetMat4("model", modelMatrix);
 
-    // Выводим кадр на экран (вместо SDL_RenderPresent)
+        // РИСУЕМ!
+        testWall->Draw(*basicShader);
+    }
+
+    // 5. Рисуем меню разработчика поверх 3D
+    DevMenu::Render(this);
+
+    // 6. Выводим кадр на экран
     SDL_GL_SwapWindow(window);
 }
 
@@ -265,24 +284,22 @@ void Engine::Run() {
         Uint64 currentTime = SDL_GetTicks();
         float deltaTime = (currentTime - lastTime) / 1000.0f;
         lastTime = currentTime;
+        
         ProcessInput();
 
+        // Временно оставляем системы, хотя для 2D они пока не работают
         const bool* keyboardState = SDL_GetKeyboardState(nullptr);
         playerMovementSystem.Update(keyboardState, deltaTime, entities);
 
         cameraFollowSystem.Update(
-            deltaTime,
-            entities,
-            static_cast<float>(windowWidth),
-            static_cast<float>(windowHeight),
-            TileWidth,
-            TileHeight,
-            camera
+            deltaTime, entities, 
+            static_cast<float>(windowWidth), static_cast<float>(windowHeight), 
+            TileWidth, TileHeight, camera
         );
 
         Update(deltaTime);
-        
         animationSystem.Update(deltaTime, entities);
+        
         Render();
     }
     std::cout << "[Engine] Главный цикл завершен.\n";
@@ -292,8 +309,15 @@ void Engine::Shutdown() {
     if (!isRunning) return;
     isRunning = false;
     entities.clear(); 
+    
+    if (basicShader) delete basicShader;
+    if (testWall) delete testWall;
+    
     DevMenu::Shutdown();
-    if (renderer) SDL_DestroyRenderer(renderer);
+    
+    // ВАЖНО: Удаляем GL контекст при выходе
+    if (glContext) SDL_GL_DestroyContext(glContext);
     if (window) SDL_DestroyWindow(window);
+    
     SDL_Quit();
 }
