@@ -6,6 +6,7 @@
 #include "ResourceManager.hpp"
 #include "AssetImporter.hpp"
 #include "Math.hpp"
+#include "MathGenerator.hpp"
 #include "Components/SpriteRendererComponent.hpp"
 #include "Components/TransformComponent.hpp"
 #include "Components/PlayerInputComponent.hpp"
@@ -56,9 +57,17 @@ bool Engine::Init(const char* title, int width, int height) {
     std::cout << "[Engine] GLAD инициализирован. Версия OpenGL: " << glGetString(GL_VERSION) << "\n";
 
     // 6. --- ЗАГРУЗКА 3D АССЕТОВ (Теперь всё безопасно) ---
-    basicShader = new Shader("assets/basic.vert", "assets/basic.frag");
-    testWall = new Model("assets/Mesh/wall_straight_1m_concrete.obj"); 
+    basicShader = new Shader("assets/Shaders/basic.vert", "assets/Shaders/basic.frag");
+    // testWall = new Model("assets/Mesh/wall_straight_1m_concrete.obj");
+    testWall = new Model("assets/models/TestBody3D_1p/Copilot3D-36d7902a-044d-4ab6-bf3f-ddd0895f6f1b.glb");
     // -----------------------------------------------------
+
+    // ДОБАВЛЯЕМ ЭТО: 
+    // Генерируем JSON с физикой (один раз)
+    MathGenerator::GenerateFromDirectory("assets/Characters", "assets/GeneratedMath.json");
+    // Инициализируем игрока
+    mainPlayer.Init("TestBody", "assets/GeneratedMath.json");
+
 
     SDL_ShowWindow(window);
 
@@ -179,13 +188,14 @@ void Engine::PlacePreviewObject() {
 }
 
 void Engine::ProcessInput() {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        DevMenu::ProcessEvent(&event);
-        if (event.type == SDL_EVENT_QUIT) {
-            std::cout << "[Engine] Получено событие выхода (SDL_EVENT_QUIT).\n";
-            isRunning = false;
-        }
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            DevMenu::ProcessEvent(&event);
+            if (event.type == SDL_EVENT_QUIT || (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))) {
+                isRunning = false;
+            }
+    
+        
         if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window)) {
             std::cout << "[Engine] Запрошено закрытие окна.\n";
             isRunning = false;
@@ -245,22 +255,31 @@ void Engine::Render() {
     // 2. Включаем наш шейдер и рисуем 3D
     if (basicShader && testWall) {
         basicShader->Use();
+    // Активируем шейдер
+    // shader->Use();
 
         // 3. Создаем Идеальную Изометрическую Камеру (Orthographic)
         float orthoSize = 5.0f; // Охват камеры (зум)
         float aspect = (float)windowWidth / (float)windowHeight;
         glm::mat4 projection = glm::ortho(-orthoSize * aspect, orthoSize * aspect, -orthoSize, orthoSize, -50.0f, 50.0f);
-        
-        // Камера висит сверху сбоку и смотрит в центр
+
+        // Камера теперь следит за ИГРОКОМ
+        glm::vec3 camOffset(10.0f, 10.0f, 10.0f); // Смещение изометрии
         glm::mat4 view = glm::lookAt(
-            glm::vec3(10.0f, 10.0f, 10.0f), 
-            glm::vec3(0.0f, 0.0f, 0.0f),    
+            mainPlayer.position + camOffset, // Позиция камеры (игрок + смещение)
+            mainPlayer.position,             // Куда смотрим (на игрока)
             glm::vec3(0.0f, 1.0f, 0.0f)     
         );
 
-        // 4. Позиция самой стены в мире
+        // 4. Позиция персонажа в мире из класса Player
         glm::mat4 modelMatrix = glm::mat4(1.0f);
         
+        // ВАЖНО: Используем mainPlayer.position вместо старого playerPos!
+        modelMatrix = glm::translate(modelMatrix, mainPlayer.position);
+        
+        // Поворачиваем модель в сторону движения
+        modelMatrix = glm::rotate(modelMatrix, mainPlayer.rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+
         // Отправляем матрицы в видеокарту
         basicShader->SetMat4("projection", projection);
         basicShader->SetMat4("view", view);
@@ -287,19 +306,11 @@ void Engine::Run() {
         
         ProcessInput();
 
-        // Временно оставляем системы, хотя для 2D они пока не работают
+        // ДОБАВЛЯЕМ ЭТО: Передаем кнопки и время игроку
         const bool* keyboardState = SDL_GetKeyboardState(nullptr);
-        playerMovementSystem.Update(keyboardState, deltaTime, entities);
-
-        cameraFollowSystem.Update(
-            deltaTime, entities, 
-            static_cast<float>(windowWidth), static_cast<float>(windowHeight), 
-            TileWidth, TileHeight, camera
-        );
+        mainPlayer.Update(deltaTime, keyboardState);
 
         Update(deltaTime);
-        animationSystem.Update(deltaTime, entities);
-        
         Render();
     }
     std::cout << "[Engine] Главный цикл завершен.\n";

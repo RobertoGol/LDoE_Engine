@@ -1,75 +1,71 @@
-$sourceDir = ".\" 
-$targetDir = ".\assets"
+$assetsPath = ".\assets"
+# Строгий список папок, которые мы потрошим
+$targetFolders = @("Libraries", "Materials", "split_data", "Textures", "DummyDll", "Data_for_sort")
 
-Write-Host "Начинаем умную сортировку ассетов LDoE..." -ForegroundColor Cyan
-
-# Создаем базовую директорию assets, если ее нет
-if (-not (Test-Path $targetDir)) { 
-    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null 
+# Базовые игровые категории
+$categories = @("Characters", "Weapons", "Transport", "Props", "Locations", "Audio", "UI", "Libraries", "Other")
+foreach ($c in $categories) {
+    $path = Join-Path $assetsPath $c
+    if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
 }
 
-# Получаем все файлы, исключая те, что уже отсортированы в assets
-$allFiles = Get-ChildItem -Path $sourceDir -File -Recurse | Where-Object { $_.FullName -notmatch "\\assets\\" }
+Write-Host "Начинаем сборку бандлов .bda из указанных папок..." -ForegroundColor Yellow
 
-foreach ($file in $allFiles) {
-    $ext = $file.Extension.ToLower()
-    $parent = $file.Directory.Name
-    $destFolder = ""
+foreach ($tf in $targetFolders) {
+    $folderPath = Join-Path $assetsPath $tf
+    if (-not (Test-Path $folderPath)) { continue }
 
-    # 1. Архивы в корень assets
-    if ($ext -match '\.(rar|zip|7z)$') {
-        $destFolder = $targetDir
-    }
-    # 2. JSON файлы (Unity Dumps разделяют их по папкам, сохраняем эту логику)
-    elseif ($ext -eq ".json") {
-        if ($parent -match "Animator") { $destFolder = Join-Path $targetDir "Animator" }
-        elseif ($parent -match "MonoBehaviour") { $destFolder = Join-Path $targetDir "MonoBehaviour" }
-        else { $destFolder = Join-Path $targetDir "Materials" }
-    }
-    # 3. 3D Модели
-    elseif ($ext -match '\.(obj|mesh|fbx)$') {
-        $destFolder = Join-Path $targetDir "Mesh"
-    }
-    # 4. Аудио
-    elseif ($ext -match '\.(m4a|mp3|wav|ogg)$') {
-        $destFolder = Join-Path $targetDir "Audio"
-    }
-    # 5. Текстуры
-    elseif ($ext -match '\.(png|jpg|tga|jpeg)$') {
-        $destFolder = Join-Path $targetDir "Textures"
-    }
-    # 6. Шейдеры (оригинальные из игры)
-    elseif ($ext -eq ".shader") {
-        $destFolder = Join-Path $targetDir "Shaders"
-    }
-    # 7. Шрифты
-    elseif ($ext -match '\.(ttf|otf)$') {
-        $destFolder = Join-Path $targetDir "Fonts"
-    }
-    # 8. Библиотеки и код
-    elseif ($ext -match '\.(dll|so|cs)$') {
-        $destFolder = Join-Path $targetDir "Libraries"
-    }
-    # 9. Метаданные и прочее
-    elseif ($ext -match '\.(xml|csv|txt|dat)$') {
-        $destFolder = Join-Path $targetDir "Meta"
-    }
-    else {
-        # Игнорируем скрипты сборки и неизвестный мусор
-        continue
-    }
+    # Берем все файлы внутри целевой папки
+    $files = Get-ChildItem -Path $folderPath -File -Recurse
 
-    # Создаем папку назначения, если её еще нет
-    if (-not (Test-Path $destFolder)) {
-        New-Item -ItemType Directory -Path $destFolder -Force | Out-Null
-    }
+    foreach ($file in $files) {
+        $name = $file.Name.ToLower()
+        $baseName = $file.BaseName # Имя файла без расширения
 
-    # Перемещаем файл
-    Move-Item -Path $file.FullName -Destination $destFolder -Force
+        # 1. Определяем логическую категорию
+        $destCat = "Other"
+
+        # Библиотеки и DLL не пакуем в бандлы, а просто складываем в Libraries
+        if ($file.Extension -match "\.(dll|so|cs|pdb)$" -or $tf -match "Libraries|DummyDll") { $destCat = "Libraries" }
+        elseif ($name -match "weapon|gun|rifle|bow|sword|axe|bat_|machete|cleaver|shotgun|glock|ak47|m16|grenade|c4|pistol|uzi") { $destCat = "Weapons" }
+        elseif ($name -match "backpack|headwear|torso|legs|feet|panties|helmet|armor|suit|cloth|_man_|_woman_|unisex|hair|beard|head|axel|chare|testbody|cucker|character|zombie|bloater|spit|boss|infected|parasite|deer|bear|wolf|fox|corgi|husky|dog_|turkey|fish_|cat_|puppy|npc|trader|raider|mercenary") { $destCat = "Characters" }
+        elseif ($name -match "car|pickup|tank|engine|bike|chopper|atv|boat|truck|scooter|helicopter|hovercraft") { $destCat = "Transport" }
+        elseif ($name -match "bunker|farm|commune|cellar|factory|motel|police|port|swamp|crater|settlement|laboratory|arena|location") { $destCat = "Locations" }
+        elseif ($name -match "chest|box|storage|safe|locker|workbench|table|furnace|campfire|smelter|generator|machine|furniture|decor|chair|bed|lamp|door|wall|floor|fence|window|roof|stairs|light|photo|radio|electro|pack") { $destCat = "Props" }
+        elseif ($name -match "ui_|icon|button|menu|window|dialog") { $destCat = "UI" }
+        elseif ($name -match "\.(m4a|wav|ogg)$") { $destCat = "Audio" }
+
+        # 2. Формируем путь для перемещения
+        if ($destCat -eq "Libraries") {
+            $targetDir = Join-Path $assetsPath $destCat
+        } else {
+            # МАГИЯ: Все файлы с одинаковым именем сливаются в один .bda бандл!
+            $bundleName = "$baseName.bda"
+            $targetDir = Join-Path ($assetsPath) "$destCat\$bundleName"
+        }
+
+        if (-not (Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force | Out-Null }
+
+        $targetPath = Join-Path $targetDir $file.Name
+
+        # 3. Перемещаем файл
+        if ($file.FullName -ne $targetPath) {
+            Move-Item -Path $file.FullName -Destination $targetPath -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
-# Аккуратно переносим наши самописные шейдеры в корень assets, чтобы C++ код движка сразу их нашел
-Move-Item -Path ".\basic.vert" -Destination ".\assets\basic.vert" -Force -ErrorAction SilentlyContinue
-Move-Item -Path ".\basic.frag" -Destination ".\assets\basic.frag" -Force -ErrorAction SilentlyContinue
+Write-Host "Удаляем пустые отработанные папки..." -ForegroundColor Cyan
+foreach ($tf in $targetFolders) {
+    $folderPath = Join-Path $assetsPath $tf
+    if (Test-Path $folderPath) {
+        # Удаляем вложенные пустые папки
+        Get-ChildItem -Path $folderPath -Directory -Recurse | Where-Object { (Get-ChildItem -Path $_.FullName -File -Recurse | Measure-Object).Count -eq 0 } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        # Удаляем корневую папку, если она пуста
+        if ((Get-ChildItem -Path $folderPath -File -Recurse | Measure-Object).Count -eq 0) {
+            Remove-Item -Path $folderPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 
-Write-Host "Сортировка успешно завершена! Вся матрешка разобрана по категориям." -ForegroundColor Green
+Write-Host "Сортировка завершена! Ассеты собраны в бандлы .bda" -ForegroundColor Green

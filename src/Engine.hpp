@@ -2,11 +2,12 @@
 #include <glad/glad.h>
 #include <SDL3/SDL.h>
 #include <vector>
+#include "Player.hpp"
 #include "Shader.hpp"
 #include "Model.hpp"
 #include <memory>
 #include <string>
-#include "ECS.hpp"
+
 #include "Systems/RenderSystem.hpp"
 #include "Systems/PlayerMovementSystem.hpp"
 #include "Systems/CameraFollowSystem.hpp"
@@ -16,6 +17,7 @@
 
 class Engine {
 private:
+    Player mainPlayer; 
     SDL_Window* window = nullptr;
     SDL_GLContext glContext = nullptr;
     SDL_Renderer* renderer = nullptr;
@@ -37,6 +39,7 @@ private:
     bool isPlacementMode = false;
     SDL_Texture* previewTexture = nullptr;
     Vec2 previewGridPos { 0.0f, 0.0f };
+    
     InteractionSystem interactionSystem;
 
 public:

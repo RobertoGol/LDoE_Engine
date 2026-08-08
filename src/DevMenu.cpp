@@ -43,13 +43,25 @@ void DevMenu::Render(Engine* engine) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    // Рисуем базовое меню разработчика
+    // Главная панель разработчика
     ImGui::Begin("LDoE Engine - Dev Menu");
-    ImGui::Text("Рендер: OpenGL 3.3");
+    ImGui::Text("Render: OpenGL 3.3");
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-    if (engine->IsPlacementMode()) {
-        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "Режим строительства: ВКЛ");
+    
+    ImGui::Separator();
+    
+    // Секция управления объектами
+    if (ImGui::CollapsingHeader("Spawn Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Button("Spawn Concrete Wall")) {
+            // Здесь вызовем функцию спавна нашей стены из assets/Mesh/
+            // engine->SpawnModel("assets/Mesh/wall_straight_1m_concrete.obj");
+        }
     }
+
+    if (engine->IsPlacementMode()) {
+        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "Building Mode: ON");
+    }
+    
     ImGui::End();
 
     // Рендерим окна ImGui в буфер OpenGL
