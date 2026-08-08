@@ -53,9 +53,6 @@ set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(INJECT_DEBUG_POSTFIX OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(assimp)
 
-# Не забудь добавить glm и assimp в target_link_libraries твоего LDoE_Engine!
-# Примерно так: target_link_libraries(LDoE_Engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm assimp)
-
 # nlohmann/json
 FetchContent_Declare(
     nlohmann_json
@@ -72,7 +69,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
-file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.hpp")
+# =====================================================================
+# ИСПРАВЛЕННАЯ ЧАСТЬ СБОРКИ ПРОЕКТА
+# =====================================================================
+
+# Ищем все исходники, включая новый glad.c
+file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.hpp" "src/glad/glad.c")
 
 add_executable(LDoE_Engine 
     ${ENGINE_SOURCES}
@@ -84,19 +86,22 @@ add_executable(LDoE_Engine
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp # <-- ВАЖНО: заменили sdlrenderer3 на opengl3!
 )
 
+# СЮДА кладем ПУТИ к папкам с заголовочными файлами (.hpp / .h)
 target_include_directories(LDoE_Engine PRIVATE 
     src 
     ${imgui_SOURCE_DIR} 
     ${imgui_SOURCE_DIR}/backends
+    ${glm_SOURCE_DIR}       # <-- Математика здесь
+    src/glad/include        # <-- GLAD здесь
 )
 
+# СЮДА кладем скомпилированные БИБЛИОТЕКИ (И НИКАКИХ ПУТЕЙ К ПАПКАМ!)
 target_link_libraries(LDoE_Engine PRIVATE 
     SDL3::SDL3 
     SDL3_image::SDL3_image 
     nlohmann_json::nlohmann_json
-    glm::glm   # <-- Подключаем 3D-математику к проекту
     assimp     # <-- Подключаем загрузчик моделей к проекту
+    opengl32   # <-- Системный OpenGL
 )
 
 target_compile_definitions(LDoE_Engine PRIVATE ENABLE_DEV_MENU=1)
-

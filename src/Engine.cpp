@@ -3,6 +3,7 @@
 #include "ResourceManager.hpp"
 #include "AssetImporter.hpp"
 #include "Math.hpp"
+#include <SDL3/SDL_opengl.h>
 #include "Components/SpriteRendererComponent.hpp"
 #include "Components/TransformComponent.hpp"
 #include "Components/PlayerInputComponent.hpp"
@@ -11,6 +12,8 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <glad/glad.h>
+#include <SDL3/SDL_opengl.h>
 
 Engine::Engine() : isRunning(false), window(nullptr), renderer(nullptr) {}
 Engine::~Engine() { Shutdown(); }
@@ -40,6 +43,16 @@ bool Engine::Init(const char* title, int width, int height) {
 
     // 4. Создаем OpenGL контекст ВМЕСТО SDL_Renderer
     glContext = SDL_GL_CreateContext(window);
+
+    glContext = SDL_GL_CreateContext(window);
+    
+    // Активируем GLAD
+    if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
+        std::cerr << "[Engine] Ошибка инициализации GLAD!\n";
+        return false;
+    }
+    std::cout << "[Engine] GLAD инициализирован. Версия OpenGL: " << glGetString(GL_VERSION) << "\n";
+
     if (!glContext) {
         std::cerr << "[Engine] Ошибка создания OpenGL контекста: " << SDL_GetError() << "\n";
         return false;
@@ -50,7 +63,7 @@ bool Engine::Init(const char* title, int width, int height) {
     // ВАЖНО: Мы пока не создаем SDL_Renderer, потому что будем рисовать через OpenGL!
     
     // Инициализация ImGui (пока закомментируем старый 2D, ИИ напишет нам новый)
-    // DevMenu::Init(window, renderer); 
+    DevMenu::Init(window, glContext);
     
     // Загрузку 2D-спрайтов игрока мы тоже временно отключаем, так как переходим на 3D-модели
     std::cout << "[Engine] OpenGL 3.3 Инициализирован!\n";
@@ -228,8 +241,8 @@ void Engine::Update(float deltaTime) {
 void Engine::Render() {
     // Очищаем экран и буфер глубины средствами OpenGL (вместо SDL_RenderClear)
     // Закомментируй эти строки, если компилятор ругается на GL_COLOR_BUFFER_BIT (до того как мы подключим glad/glew)
-    // glClearColor(0.14f, 0.14f, 0.14f, 1.0f);
-    // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClearColor(0.14f, 0.14f, 0.14f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // --- ЗДЕСЬ БУДЕТ РЕНДЕР 3D МОДЕЛЕЙ ИЗОМЕТРИИ ---
     /*
@@ -238,7 +251,8 @@ void Engine::Render() {
     renderSystem.Update(renderer, entities, context);
     */
 
-    // DevMenu::Render(this); // Временно отключаем, пока ИИ не переведет его на OpenGL3
+    DevMenu::Render(this); // Временно отключаем, пока ИИ не переведет его на OpenGL3
+
 
     // Выводим кадр на экран (вместо SDL_RenderPresent)
     SDL_GL_SwapWindow(window);

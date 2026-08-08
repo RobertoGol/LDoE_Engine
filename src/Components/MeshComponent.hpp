@@ -3,9 +3,24 @@
 #include <string>
 
 struct MeshComponent : public Component {
-    std::string modelPath; // Путь к .obj или .fbx
-    unsigned int VAO = 0;  // Vertex Array Object
-    unsigned int VBO = 0;  // Vertex Buffer Object
-    unsigned int EBO = 0;  // Element Buffer Object
-    int indexCount = 0;    // Количество индексов (вершин) для отрисовки
+    std::string modelPath; // Путь к файлу .obj или .fbx
+    
+    // Идентификаторы OpenGL для хранения 3D-геометрии
+    unsigned int VAO = 0; 
+    unsigned int VBO = 0; 
+    unsigned int EBO = 0; 
+    
+    int indexCount = 0;    // Количество точек для отрисовки
+
+    // Добавляем обязательные методы для сохранения/загрузки:
+    json Serialize() override {
+        return {
+            {"type", "MeshComponent"},
+            {"modelPath", modelPath}
+        };
+    }
+
+    void Deserialize(const json& j) override {
+        modelPath = j.value("modelPath", "");
+    }
 };
